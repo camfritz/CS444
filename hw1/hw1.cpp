@@ -5,11 +5,13 @@
 #include <semaphore.h>
 #include <time.h>
 #include <vector>
+#include <signal.h>
 using namespace std;
 
 int num_prod, num_cons, buf_size, num_items;
-pthread_t *consumerThreads, *producerThreads;
-sem_t producerSemaphore, consumerSemaphore;
+vector <pthread_t> producerThreads;
+vector <pthread_t> consumerThreads;
+sem_t *producerSemaphore, *consumerSemaphore;
 pthread_mutex_t mutex1;
 
 struct Item {
@@ -19,31 +21,68 @@ struct Item {
 
 vector <Item> itemBuffer;
 int availableItemID = 0;
+int availableConsumerNumber = 0;
+int itemsProduced = 0;
 
 void *produceItem(void *arg) {
-	sem_wait(&producerSemaphore);
+	while(itemsProduced < num_items) {
+		sem_wait(producerSemaphore);
+		fprintf(stderr, "PRODUCER LOCKING\n");
+		pthread_mutex_lock(&mutex1);
+		fprintf(stderr, "****PRODUCER LOCKED****\n");
 
-	usleep(rand() % (700-300 + 1) + 300);
-	Item newItem;
+		Item newItem;
+		newItem.itemID = availableItemID;
+		++availableItemID;
 
-	pthread_mutex_lock(&mutex1);
-	newItem.itemID = availableItemID;
-	++availableItemID;
+		newItem.itemSleepTime = rand() % (900-200 + 1) + 200;
+		fprintf(stderr, "PRODUCER SLEEPING\n");
+		usleep(rand() % (700-300 + 1) + 300);
+		itemBuffer.push_back(newItem);
+		fprintf(stderr, "ITEM PRODUCED\n");
+		++itemsProduced;
+		sem_post(consumerSemaphore);
+		fprintf(stderr, "PRODUCER UNLOCKING\n");
+		pthread_mutex_unlock(&mutex1);
 
-	newItem.itemSleepTime = rand() % (900-200 + 1) + 200;
-
-	itemBuffer.push_back(newItem);
-
-	pthread_mutex_unlock(&mutex1);
-	sem_post(&consumerSemaphore);
-
+	}
 }
 
 void *consumeItem(void *arg) {
+	pthread_mutex_lock(&mutex1);
+	int currentConsumerNumber = availableConsumerNumber;
+	++availableConsumerNumber;
+	pthread_mutex_unlock(&mutex1);
 
+	while(1) {
+		sem_wait(consumerSemaphore);
+		fprintf(stderr, "CONSUMER LOCKING\n");
+		pthread_mutex_lock(&mutex1);
+		fprintf(stderr, "****CONSUMER LOCKED****\n");
+
+		Item itemToBeConsumed = itemBuffer.front();
+		usleep(itemToBeConsumed.itemSleepTime);
+		fprintf(stderr, "CONSUMER SLEEPING\n");
+		fprintf(stdout, "%d: consuming: %d\n", currentConsumerNumber, itemToBeConsumed.itemID);
+		itemBuffer.erase(itemBuffer.begin());
+		sem_post(producerSemaphore);
+		fprintf(stderr, "CONSUMER UNLOCKING\n");
+		pthread_mutex_unlock(&mutex1);
+
+	}
+}
+
+void signalHandler(int sig) {
+	sem_close(producerSemaphore);
+	sem_close(consumerSemaphore);
+
+	sem_unlink("/producerSemaphore");
+	sem_unlink("/consumerSemaphore");
+	exit(0);
 }
 
 int main(int argc, char **argv) {
+	signal(SIGINT, signalHandler);
 	//error check for correct argument counts
 	if(argc != 5) {
 		printf("Usage: ./hw1 num_prod num_cons buf_size num_items\n");
@@ -62,35 +101,34 @@ int main(int argc, char **argv) {
 	buf_size = atoi(argv[3]);
 	num_items = atoi(argv[4]);
 
-	//allocate consumer and producer threads
-	pthread_t *producerThreads = (pthread_t *) malloc(sizeof(pthread_t) * num_prod);
-	pthread_t *consumerThreads = (pthread_t *) malloc(sizeof(pthread_t) * num_cons);
-
 	//initialize semaphores and mutex
-	sem_init(&producerSemaphore, 0, buf_size);
-	sem_init(&consumerSemaphore, 0, 0);
+	producerSemaphore = sem_open("/producerSemaphore", O_CREAT, 0777, buf_size);
+	consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
 	pthread_mutex_init(&mutex1, NULL);
 
 	int range;
 	for(int i = 0; i < num_prod; i++) {
-		pthread_create(&producerThreads[i], NULL, produceItem, (void *) range);
+		pthread_t p;
+		pthread_create(&p, NULL, produceItem, (void *) range);
+		producerThreads.push_back(p);
 	}
 
 	for(int i = 0; i < num_cons; i++) {
-		pthread_create(&consumerThreads[i], NULL, consumeItem, (void *) range);
+		pthread_t p;
+		pthread_create(&p, NULL, consumeItem, (void *) range);
+		consumerThreads.push_back(p);
 	}
 
 	for(int i = 0; i < num_prod; i++) {
 		pthread_join(producerThreads[i], NULL);
 	}
 
+	fprintf(stdout, "DONE PRODUCING!!\n");
+
 	for(int i = 0; i < num_cons; i++) {
 		pthread_join(consumerThreads[i], NULL);
 	}
 
-	for(int i = 0; i < itemBuffer.size(); i++) {
-		printf("ITEM ID: %d\n", itemBuffer[i].itemID);
-		printf("ITEM SLEEP TIME: %d\n", itemBuffer[i].itemSleepTime);
-	}
+	while(1);
 
 }
