@@ -6,6 +6,7 @@
 #include <time.h>
 #include <vector>
 #include <signal.h>
+#include <math.h>
 using namespace std;
 
 int num_prod, num_cons, buf_size, num_items;
@@ -19,32 +20,37 @@ struct Item {
 	int itemSleepTime;
 };
 
+struct processingSegment {
+	int numToProduce;
+};
+
+vector <processingSegment> segments;
 vector <Item> itemBuffer;
 int availableItemID = 0;
 int availableConsumerNumber = 0;
-int itemsProduced = 0;
 
 void *produceItem(void *arg) {
-	while(itemsProduced < num_items) {
+	struct processingSegment *segment = (processingSegment *) arg;
+	int numToProduce = segment->numToProduce;
+	while(numToProduce > 0) {
 		sem_wait(producerSemaphore);
-		fprintf(stderr, "PRODUCER LOCKING\n");
+		//fprintf(stderr, "PRODUCER LOCKING\n");
 		pthread_mutex_lock(&mutex1);
-		fprintf(stderr, "****PRODUCER LOCKED****\n");
+		//fprintf(stderr, "****PRODUCER LOCKED****\n");
 
 		Item newItem;
 		newItem.itemID = availableItemID;
 		++availableItemID;
 
 		newItem.itemSleepTime = rand() % (900-200 + 1) + 200;
-		fprintf(stderr, "PRODUCER SLEEPING\n");
+		//fprintf(stderr, "PRODUCER SLEEPING\n");
 		usleep(rand() % (700-300 + 1) + 300);
 		itemBuffer.push_back(newItem);
-		fprintf(stderr, "ITEM PRODUCED\n");
-		++itemsProduced;
+		//fprintf(stderr, "ITEM PRODUCED\n");
+		--numToProduce;
 		sem_post(consumerSemaphore);
-		fprintf(stderr, "PRODUCER UNLOCKING\n");
+		//fprintf(stderr, "PRODUCER UNLOCKING\n");
 		pthread_mutex_unlock(&mutex1);
-
 	}
 }
 
@@ -56,23 +62,28 @@ void *consumeItem(void *arg) {
 
 	while(1) {
 		sem_wait(consumerSemaphore);
-		fprintf(stderr, "CONSUMER LOCKING\n");
+		//fprintf(stderr, "CONSUMER LOCKING\n");
 		pthread_mutex_lock(&mutex1);
-		fprintf(stderr, "****CONSUMER LOCKED****\n");
+		//fprintf(stderr, "****CONSUMER LOCKED****\n");
 
 		Item itemToBeConsumed = itemBuffer.front();
-		usleep(itemToBeConsumed.itemSleepTime);
-		fprintf(stderr, "CONSUMER SLEEPING\n");
+		int sleepTime = itemToBeConsumed.itemSleepTime;
+		//fprintf(stderr, "CONSUMER SLEEPING\n");
 		fprintf(stdout, "%d: consuming: %d\n", currentConsumerNumber, itemToBeConsumed.itemID);
 		itemBuffer.erase(itemBuffer.begin());
 		sem_post(producerSemaphore);
-		fprintf(stderr, "CONSUMER UNLOCKING\n");
+		//fprintf(stderr, "CONSUMER UNLOCKING\n");
 		pthread_mutex_unlock(&mutex1);
-
+		usleep(sleepTime);
 	}
 }
 
 void signalHandler(int sig) {
+	exit(0);
+
+	for(int i = 0; i < num_cons; i++) {
+		pthread_join(consumerThreads[i], NULL);
+	}
 	sem_close(producerSemaphore);
 	sem_close(consumerSemaphore);
 
@@ -106,10 +117,36 @@ int main(int argc, char **argv) {
 	consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
 	pthread_mutex_init(&mutex1, NULL);
 
+	//create processing segments for thread operations
 	int range;
+	if((num_items % num_prod) == 0) {
+		range = num_items / num_prod;
+		for(int i = 0; i < num_prod; i++) {
+			processingSegment newSegment;
+			newSegment.numToProduce = range;
+			segments.push_back(newSegment);
+		}
+	}
+	else {
+		range = floor(num_items / num_prod);
+		int rangeCounter = num_items;
+
+		for(int i = 0; i < num_prod; i++) {
+			if(i < num_prod - 1) {
+				rangeCounter -= range;
+			}
+			else {
+				range = rangeCounter;
+			}
+			processingSegment newSegment;
+			newSegment.numToProduce = range;
+			segments.push_back(newSegment);
+		}
+	}
+
 	for(int i = 0; i < num_prod; i++) {
 		pthread_t p;
-		pthread_create(&p, NULL, produceItem, (void *) range);
+		pthread_create(&p, NULL, produceItem, (void *) &segments[i]);
 		producerThreads.push_back(p);
 	}
 
@@ -123,11 +160,7 @@ int main(int argc, char **argv) {
 		pthread_join(producerThreads[i], NULL);
 	}
 
-	fprintf(stdout, "DONE PRODUCING!!\n");
-
-	for(int i = 0; i < num_cons; i++) {
-		pthread_join(consumerThreads[i], NULL);
-	}
+	fprintf(stderr, "DONE PRODUCING!!\n");
 
 	while(1);
 
