@@ -14,7 +14,7 @@ using namespace std;
 int num_prod, num_cons, buf_size, num_items;
 vector <pthread_t> producerThreads;
 vector <pthread_t> consumerThreads;
-sem_t producerSemaphore, consumerSemaphore;
+sem_t *producerSemaphore, *consumerSemaphore;
 pthread_mutex_t mutex1;
 
 //struct to represent an item.
@@ -44,7 +44,7 @@ void *produceItem(void *arg) {
 	while(numToProduce > 0) {
 		//randomly sleep, then wait for the semaphore to open
 		usleep(rand() % (700-300 + 1) + 300);
-		sem_wait(&producerSemaphore);
+		sem_wait(producerSemaphore);
 		Item newItem;
 		pthread_mutex_lock(&mutex1);
 		//produce a new item with the current available item ID, increment available item ID for the next thread to use
@@ -58,7 +58,7 @@ void *produceItem(void *arg) {
 		itemBuffer.push_back(newItem);
 		pthread_mutex_unlock(&mutex1);
 		--numToProduce;
-		sem_post(&consumerSemaphore);
+		sem_post(consumerSemaphore);
 	}
 }
 
@@ -74,7 +74,7 @@ void *consumeItem(void *arg) {
 
 	while(1) {
 		//wait for consumer semaphore to open
-		sem_wait(&consumerSemaphore);
+		sem_wait(consumerSemaphore);
 		//lock mutex, fetch front item of the vector
 		pthread_mutex_lock(&mutex1);
 		Item itemToBeConsumed = itemBuffer.front();
@@ -92,11 +92,21 @@ void *consumeItem(void *arg) {
 		fflush(stdout);
 		//consumer sleeps for specified amount of time contained in the consumed item, post to producer semaphore to signal space is available to produce an item.
 		usleep(sleepTime);
-		sem_post(&producerSemaphore);
+		sem_post(producerSemaphore);
 	}
 }
 
+void signalHandler(int sig) {
+	sem_close(producerSemaphore);
+	sem_close(consumerSemaphore);
+
+	sem_unlink("/producerSemaphore");
+	sem_unlink("/consumerSemaphore");
+	exit(0);
+}
+
 int main(int argc, char **argv) {
+	signal(SIGINT, signalHandler);
 	//error check for correct argument counts
 	if(argc != 5) {
 		printf("Usage: ./hw1 num_prod num_cons buf_size num_items\n");
@@ -116,8 +126,10 @@ int main(int argc, char **argv) {
 	num_items = atoi(argv[4]);
 
 	//initialize semaphores and mutex
-	sem_init(&producerSemaphore, 0, buf_size);
-	sem_init(&consumerSemaphore, 0, 0);
+	producerSemaphore = sem_open("/producerSemaphore", O_CREAT, 0777, buf_size);
+	consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
+	// sem_init(&producerSemaphore, 0, buf_size);
+	// sem_init(&consumerSemaphore, 0, 0);
 	pthread_mutex_init(&mutex1, NULL);
 
 	//create processing segments for thread operations
