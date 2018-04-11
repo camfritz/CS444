@@ -45,9 +45,9 @@ void *produceItem(void *arg) {
 		//randomly sleep, then wait for the semaphore to open
 		usleep(rand() % (700-300 + 1) + 300);
 		sem_wait(&producerSemaphore);
+		Item newItem;
 		pthread_mutex_lock(&mutex1);
 		//produce a new item with the current available item ID, increment available item ID for the next thread to use
-		Item newItem;
 		newItem.itemID = availableItemID;
 		++availableItemID;
 
@@ -56,8 +56,8 @@ void *produceItem(void *arg) {
 
 		//push item into vector, decrement the counter, unlock mutex and post to the consumer semaphore to signal an item has been produced
 		itemBuffer.push_back(newItem);
-		--numToProduce;
 		pthread_mutex_unlock(&mutex1);
+		--numToProduce;
 		sem_post(&consumerSemaphore);
 	}
 }
@@ -83,29 +83,20 @@ void *consumeItem(void *arg) {
 		sleepTime = itemToBeConsumed.itemSleepTime;
 
 		//consume the item..erase item from buffer
-		fprintf(stdout, "%d: consuming: %d\n", currentConsumerNumber, itemToBeConsumed.itemID);
-		fflush(stdout);
 		itemBuffer.erase(itemBuffer.begin());
 
-		//unlock mutex, post to producer semaphore to signal space is available to produce an item.
+		//unlock mutex
 		pthread_mutex_unlock(&mutex1);
 
-		//consumer sleeps for specified amount of time contained in the consumed item
+		fprintf(stdout, "%d: consuming: %d\n", currentConsumerNumber, itemToBeConsumed.itemID);
+		fflush(stdout);
+		//consumer sleeps for specified amount of time contained in the consumed item, post to producer semaphore to signal space is available to produce an item.
 		usleep(sleepTime);
 		sem_post(&producerSemaphore);
 	}
 }
 
-void signalHandler(int sig) {
-
-	//close semaphores, exit
-	sem_destroy(&producerSemaphore);
-	sem_destroy(&consumerSemaphore);
-	exit(0);
-}
-
 int main(int argc, char **argv) {
-	// signal(SIGINT, signalHandler);
 	//error check for correct argument counts
 	if(argc != 5) {
 		printf("Usage: ./hw1 num_prod num_cons buf_size num_items\n");
@@ -125,8 +116,6 @@ int main(int argc, char **argv) {
 	num_items = atoi(argv[4]);
 
 	//initialize semaphores and mutex
-	// producerSemaphore = sem_open("/producerSemaphore", O_CREAT, 0777, buf_size);
-	// consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
 	sem_init(&producerSemaphore, 0, buf_size);
 	sem_init(&consumerSemaphore, 0, 0);
 	pthread_mutex_init(&mutex1, NULL);
@@ -157,24 +146,24 @@ int main(int argc, char **argv) {
 			segments.push_back(newSegment);
 		}
 	}
-
+//create threads for producers
 	for(int i = 0; i < num_prod; i++) {
 		pthread_t p;
 		pthread_create(&p, NULL, produceItem, (void *) &segments[i]);
 		producerThreads.push_back(p);
 	}
-
+//create threads for consumers
 	for(int i = 0; i < num_cons; i++) {
 		pthread_t p;
 		pthread_create(&p, NULL, consumeItem, (void *) range);
 		consumerThreads.push_back(p);
 	}
-
+//join producer threads
 	for(int i = 0; i < num_prod; i++) {
 		pthread_join(producerThreads[i], NULL);
 	}
 
 	fprintf(stderr, "DONE PRODUCING!!\n");
-
+//wait until SIGINT is recevied
 	while(1);
 }
