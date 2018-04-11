@@ -10,85 +10,102 @@
 #include <math.h>
 using namespace std;
 
+//declare mutexes, semaphores, thread vectors, cmd line integers
 int num_prod, num_cons, buf_size, num_items;
 vector <pthread_t> producerThreads;
 vector <pthread_t> consumerThreads;
-sem_t *producerSemaphore, *consumerSemaphore;
+sem_t producerSemaphore, consumerSemaphore;
 pthread_mutex_t mutex1;
 
+//struct to represent an item.
 struct Item {
 	int itemID;
 	int itemSleepTime;
 };
 
+//struct to represent processing segment to split work between threads
 struct processingSegment {
 	int numToProduce;
 };
 
+//declare vectors to store items and processing segments.
 vector <processingSegment> segments;
 vector <Item> itemBuffer;
+
+//declare ints for initial itemID's and consumer #'s
 int availableItemID = 0;
 int availableConsumerNumber = 0;
 
 void *produceItem(void *arg) {
+	//pass processing segment int, parse number of items for this thread to produce from segment
 	struct processingSegment *segment = (processingSegment *) arg;
 	int numToProduce = segment->numToProduce;
+
 	while(numToProduce > 0) {
+		//randomly sleep, then wait for the semaphore to open
 		usleep(rand() % (700-300 + 1) + 300);
-		sem_wait(producerSemaphore);
-		// fprintf(stderr, "PRODUCER LOCKING\n");
+		sem_wait(&producerSemaphore);
 		pthread_mutex_lock(&mutex1);
-		// fprintf(stderr, "****PRODUCER LOCKED****\n");
+		//produce a new item with the current available item ID, increment available item ID for the next thread to use
 		Item newItem;
 		newItem.itemID = availableItemID;
 		++availableItemID;
 
+		//assign random sleep time to item
 		newItem.itemSleepTime = rand() % (900-200 + 1) + 200;
-		// fprintf(stderr, "PRODUCER SLEEPING\n");
+
+		//push item into vector, decrement the counter, unlock mutex and post to the consumer semaphore to signal an item has been produced
 		itemBuffer.push_back(newItem);
-		// fprintf(stderr, "ITEM PRODUCED\n");
 		--numToProduce;
-		// fprintf(stderr, "PRODUCER UNLOCKING\n");
 		pthread_mutex_unlock(&mutex1);
-		sem_post(consumerSemaphore);
+		sem_post(&consumerSemaphore);
 	}
 }
 
 void *consumeItem(void *arg) {
+	//lock mutex, assign this consumer the current available consumer number and increment counter for next consumer to use. Unlock mutex after assignment
 	pthread_mutex_lock(&mutex1);
 	int currentConsumerNumber = availableConsumerNumber;
 	++availableConsumerNumber;
 	pthread_mutex_unlock(&mutex1);
+
+	//int for consumer to sleep after consuming item
 	int sleepTime;
 
 	while(1) {
-		sem_wait(consumerSemaphore);
-		// fprintf(stderr, "CONSUMER LOCKING\n");
+		//wait for consumer semaphore to open
+		sem_wait(&consumerSemaphore);
+		//lock mutex, fetch front item of the vector
 		pthread_mutex_lock(&mutex1);
-		// fprintf(stderr, "****CONSUMER LOCKED****\n");
 		Item itemToBeConsumed = itemBuffer.front();
+
+		//assign the amount of time the consumer will sleep after consuming the item
 		sleepTime = itemToBeConsumed.itemSleepTime;
-		// fprintf(stderr, "CONSUMER SLEEPING\n");
+
+		//consume the item..erase item from buffer
 		fprintf(stdout, "%d: consuming: %d\n", currentConsumerNumber, itemToBeConsumed.itemID);
+		fflush(stdout);
 		itemBuffer.erase(itemBuffer.begin());
-		// fprintf(stderr, "CONSUMER UNLOCKING\n");
+
+		//unlock mutex, post to producer semaphore to signal space is available to produce an item.
 		pthread_mutex_unlock(&mutex1);
-		sem_post(producerSemaphore);
+
+		//consumer sleeps for specified amount of time contained in the consumed item
 		usleep(sleepTime);
+		sem_post(&producerSemaphore);
 	}
 }
 
 void signalHandler(int sig) {
-	sem_close(producerSemaphore);
-	sem_close(consumerSemaphore);
 
-	sem_unlink("/producerSemaphore");
-	sem_unlink("/consumerSemaphore");
+	//close semaphores, exit
+	sem_destroy(&producerSemaphore);
+	sem_destroy(&consumerSemaphore);
 	exit(0);
 }
 
 int main(int argc, char **argv) {
-	signal(SIGINT, signalHandler);
+	// signal(SIGINT, signalHandler);
 	//error check for correct argument counts
 	if(argc != 5) {
 		printf("Usage: ./hw1 num_prod num_cons buf_size num_items\n");
@@ -108,8 +125,10 @@ int main(int argc, char **argv) {
 	num_items = atoi(argv[4]);
 
 	//initialize semaphores and mutex
-	producerSemaphore = sem_open("/producerSemaphore", O_CREAT, 0777, buf_size);
-	consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
+	// producerSemaphore = sem_open("/producerSemaphore", O_CREAT, 0777, buf_size);
+	// consumerSemaphore = sem_open("/consumerSemaphore", O_CREAT, 0777, 0);
+	sem_init(&producerSemaphore, 0, buf_size);
+	sem_init(&consumerSemaphore, 0, 0);
 	pthread_mutex_init(&mutex1, NULL);
 
 	//create processing segments for thread operations
