@@ -40,25 +40,6 @@ if(num_barbers <= 0 or num_clients <= 0 or num_chairs <= 0 or arrival_t <= 0 or 
 
 #######################################################
 
-# #Instantiate chair objects
-# chairs = [None] * num_chairs
-# for i in range (0, len(chairs)):
-# 	chairs[i] = Chair()
-
-# #Instantiate client objects
-# clients = [None] * num_clients
-# for i in range(0, len(clients)):
-# 	clients[i] = Client()
-# 	clients[i].IDNumber = (i + 1)
-
-# #Instantiate barber objects
-# barbers = [None] * num_barbers
-# for i in range(0, len(barbers)):
-# 	barbers[i] = Barber()
-# 	barbers[i].IDNumber = (i + 1)
-
-#######################################################
-
 clientThreads = []
 barberThreads = []
 
@@ -68,35 +49,95 @@ mutex = threading.Lock()
 availableBarberID = 1
 availableClientID = 1
 cv = threading.Condition()
+clientsDone = False
+
+haircuts_successful = 0
+avg_sleep_time = 0
+haircuts_failed = 0
+avg_wait_time = 0
+#######################################################
 
 def BarberAction(ID):
 	barber = Barber()
 	mutex.acquire()
 	global availableBarberID
 	barber.IDNumber = availableBarberID
-	barber.Status = "Sleeping"
 	availableBarberID += 1
 	mutex.release()
-	# print "BARBER ID: " + str(barber.IDNumber)
 
-	while(1):
+	while(clientsDone == False):
 		cv.acquire()
+		barber.Status = "Sleeping"
+		print "barber " + str(barber.IDNumber) + ' ' + barber.Status
 		cv.wait()
 		#Do Haricut
 		barber.Status = "Cutting hair"
+		print "barber " + str(barber.IDNumber) + ' ' + barber.Status
 		time.sleep(haircut_t / 1000000.0)
 		cv.release()
-		barber.Status = "Sleeping"
 
 def ClientAction(ID):
+	global haircuts_successful
+	global haircuts_failed
 	client = Client()
 	mutex.acquire()
 	global availableClientID
 	client.IDNumber = availableClientID
 	client.Status = "Arriving"
+	print "client " + str(client.IDNumber) + ' ' + client.Status
 	availableClientID += 1
 	mutex.release()
-	# print "CLIENT ID: " + str(client.IDNumber)
+
+	#Check if barber is available (trywait)
+	if(barberSemaphore.acquire(False)):
+		#If barber available, decrement barber semaphore, notify CV. increment once done. Exit
+		cv.acquire()
+		cv.notify()
+		cv.release()
+		client.Status = "Getting haircut"
+		print "client " + str(client.IDNumber) + ' ' + client.Status
+		time.sleep(haircut_t / 1000000.0)
+		barberSemaphore.release()
+
+		mutex.acquire()
+		haircuts_successful += 1
+		mutex.release()
+
+		exit(0)
+
+	#If no barber, check chair semaphore (trywait)
+	elif(chairSemaphore.acquire(False)):
+		#If chair available, wait on barber, notify CV, increment barber sem. Exit
+		client.Status = "Waiting"
+		print "client " + str(client.IDNumber) + ' ' + client.Status
+		barberSemaphore.acquire()
+		chairSemaphore.release()
+
+		cv.acquire()
+		cv.notify()
+		cv.release()
+
+		client.Status = "Getting haircut"
+		time.sleep(haircut_t / 1000000.0)
+		print "client " + str(client.IDNumber) + ' ' + client.Status
+		barberSemaphore.release()
+
+		mutex.acquire()
+		haircuts_successful += 1
+		mutex.release()
+
+		exit(0)
+
+	#Else, exit
+	else:
+		client.Status = "Leaving (Did not get haircut)"
+		print "client " + str(client.IDNumber) + ' ' + client.Status
+
+		mutex.acquire()
+		haircuts_failed += 1
+		mutex.release()
+		exit(0)
+
 
 #Start barber threads
 for i in range(0, num_barbers):
@@ -110,6 +151,22 @@ for i in range(0, num_clients):
 	clientThreads.append(t)
 	time.sleep(random.randint(1, arrival_t) / 1000000.0)
 	t.start()
+
+for i in range(0, num_clients):
+	clientThreads[i].join()
+
+clientsDone = True
+print "CLIENTS ARE DONE!!!"
+
+cv.acquire()
+cv.notify_all()
+cv.release()
+
+for i in range(0, num_barbers):
+	barberThreads[i].join()
+
+print "SUCCESSFUL HAIRCUTS: " + str(haircuts_successful)
+print "FAILED HAIRCUTS: " + str(haircuts_failed)
 
 
 
