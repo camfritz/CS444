@@ -14,10 +14,6 @@ class Client:
 		self.Status = None
 		self.IDNumber = None
 
-# class Chair:
-# 	def __init__(self):
-# 		self.hasClient = False
-
 #Do some command line argument error checking
 if(len(sys.argv) < 6):
 	print ("usage: python hw2.py num_barbers num_clients num_chairs arrival_t haircut_t")
@@ -55,30 +51,44 @@ haircuts_successful = 0
 avg_sleep_time = 0
 haircuts_failed = 0
 avg_wait_time = 0
+numWaited = 0
 #######################################################
 
 def BarberAction(ID):
 	barber = Barber()
 	mutex.acquire()
 	global availableBarberID
+	global avg_sleep_time
 	barber.IDNumber = availableBarberID
 	availableBarberID += 1
 	mutex.release()
 
 	while(clientsDone == False):
+		#Sleep until notified of a client
 		cv.acquire()
 		barber.Status = "Sleeping"
 		print "barber " + str(barber.IDNumber) + ' ' + barber.Status
+		begin = int(round(time.time() * 1000000))
 		cv.wait()
+		end = int(round(time.time() * 1000000))
+
+		#If clients are done, release CV mutex and exit the thread
+		if(clientsDone == True):
+			cv.release()
+			exit(0)
+
 		#Do Haricut
 		barber.Status = "Cutting hair"
 		print "barber " + str(barber.IDNumber) + ' ' + barber.Status
 		time.sleep(haircut_t / 1000000.0)
+		avg_sleep_time += (end - begin)
 		cv.release()
 
 def ClientAction(ID):
 	global haircuts_successful
 	global haircuts_failed
+	global avg_wait_time
+	global numWaited
 	client = Client()
 	mutex.acquire()
 	global availableClientID
@@ -93,9 +103,9 @@ def ClientAction(ID):
 		#If barber available, decrement barber semaphore, notify CV. increment once done. Exit
 		cv.acquire()
 		cv.notify()
-		cv.release()
 		client.Status = "Getting haircut"
 		print "client " + str(client.IDNumber) + ' ' + client.Status
+		cv.release()
 		time.sleep(haircut_t / 1000000.0)
 		barberSemaphore.release()
 
@@ -110,20 +120,22 @@ def ClientAction(ID):
 		#If chair available, wait on barber, notify CV, increment barber sem. Exit
 		client.Status = "Waiting"
 		print "client " + str(client.IDNumber) + ' ' + client.Status
+		begin = int(round(time.time() * 1000000))
 		barberSemaphore.acquire()
 		chairSemaphore.release()
-
+		end = int(round(time.time() * 1000000))
 		cv.acquire()
 		cv.notify()
-		cv.release()
-
 		client.Status = "Getting haircut"
-		time.sleep(haircut_t / 1000000.0)
 		print "client " + str(client.IDNumber) + ' ' + client.Status
+		cv.release()
+		time.sleep(haircut_t / 1000000.0)
 		barberSemaphore.release()
 
 		mutex.acquire()
 		haircuts_successful += 1
+		numWaited += 1
+		avg_wait_time += (end - begin)
 		mutex.release()
 
 		exit(0)
@@ -156,7 +168,6 @@ for i in range(0, num_clients):
 	clientThreads[i].join()
 
 clientsDone = True
-print "CLIENTS ARE DONE!!!"
 
 cv.acquire()
 cv.notify_all()
@@ -165,8 +176,13 @@ cv.release()
 for i in range(0, num_barbers):
 	barberThreads[i].join()
 
-print "SUCCESSFUL HAIRCUTS: " + str(haircuts_successful)
-print "FAILED HAIRCUTS: " + str(haircuts_failed)
+print >> sys.stderr, "Number of haircuts: " + str(haircuts_successful)
+print >> sys.stderr, "Number who left: " + str(haircuts_failed)
+if(numWaited > 0):
+	print >> sys.stderr, "Average client wait time: " + str(avg_wait_time / numWaited)
+else:
+	print >> sys.stderr, "Average client wait time: 0"
+print >> sys.stderr, "Average barber sleep time: " + str(avg_sleep_time / num_barbers)
 
 
 
