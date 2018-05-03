@@ -18,9 +18,9 @@ int sim_time, time_slice;
 char *algorithm;
 multimap <int, Process> processes;
 multimap <int, Process>::iterator it;
-// vector <int> arrival_times;
-// vector <int> waiting_times;
-// queue <int> schedule;
+vector <int> completed_tasks;
+vector <int> waiting_times;
+vector <int> turnaround_times;
 
 void FCFS() {
 	fprintf(stderr, "****SCHEDULING AS FCFS****\n");
@@ -33,9 +33,38 @@ void FCFS() {
 		newProcess.PID = PID;
 		newProcess.burstTime = cpu_burst;
 		processes.insert(make_pair(arrival_time, newProcess));
-		// arrival_times.push_back(arrival_time);
 	}
 
+	//find waiting times for all processes
+	float waitingSum = 0;
+	for(it = processes.begin(); it != processes.end(); it++) {
+		if(it == processes.begin()) {
+			waiting_times.push_back(0);
+		}
+		else {
+			--it;
+			waitingSum += it->second.burstTime;
+			++it;
+			waiting_times.push_back(waitingSum - it->second.arrivalTime);
+		}
+	}
+	waitingSum = 0;
+	for(int i = 0; i < waiting_times.size(); i++) {
+		waitingSum += waiting_times[i];
+	}
+	waitingSum = waitingSum / waiting_times.size();
+
+	//find turnaround times for all processes
+	float turnaroundSum = 0;
+	int i = 0;
+	for(it = processes.begin(); it != processes.end(); it++) {
+		turnaround_times.push_back(it->second.burstTime + waiting_times[i]);
+		turnaroundSum += turnaround_times[i];
+		i++;
+	}
+	turnaroundSum = turnaroundSum / turnaround_times.size();
+
+//FCFS
 	int time_passed = 0;
 	while(time_passed < sim_time) {
 		for(it = processes.begin(); it != processes.end(); it++) {
@@ -51,44 +80,26 @@ void FCFS() {
 			}
 			else if(it->second.burstTime <= 0 && it->second.scheduled == true) {
 				fprintf(stdout, "%d: TERMINATING: %d\n", time_passed, it->second.PID);
+				completed_tasks.push_back(it->second.PID);
 				processes.erase(it);
 				break;
 			}
 		}
 		++time_passed;
 	}
+
+	cout << "THROUGHPUT: " << completed_tasks.size() << endl;
+	cout << "AVERAGE WAIT TIME: " << waitingSum << endl;
+	cout << "AVERAGE TURNAROUND TIME: " << turnaroundSum << endl;
+	cout << "REMAINING TASKS: " << processes.size() << endl;
 }
 
-	// //find waiting times for all processes
-	// int waitingSum = 0;
-	// for(int i = 0; i < processes.size(); i++) {
-	// 	if(i == 0) {
-	// 		waiting_times.push_back(0);
-	// 	}
-	// 	else {
-	// 		it = processes.find(i);
-	// 		waitingSum += it->second;
-	// 		waiting_times.push_back(waitingSum - arrival_times[i]);
-	// 	}
-	// }
-
-	// while(sim_time > 0) {
-	// 	//check to see if items still have to be scheduled
-	// 	if(processes.size() <= 0) {
-	// 		fprintf(stdout, "Scheduling finished\n");
-	// 		exit(0);
-	// 	}
-
-	// 	//if items still have to be scheduled, put the next item into queue
-
-	// }
-
 void SJF() {
-	fprintf(stderr, "CALLING SJF\n");
+	fprintf(stderr, "****SCHEDULING AS SJF****\n");
 }
 
 void RR() {
-	fprintf(stderr, "CALLING RR\n");
+	fprintf(stderr, "****SCHEDULING AS RR****\n");
 }
 
 int main(int argc, char **argv) {
