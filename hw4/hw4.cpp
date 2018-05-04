@@ -96,6 +96,52 @@ void FCFS() {
 
 void SJF() {
 	fprintf(stderr, "****SCHEDULING AS SJF****\n");
+
+	multimap <int, Process> SJFMap;
+	multimap <int, Process>::iterator it2;
+	bool hasScheduled = false;
+	//insert processes with PID's, burst times, arrival times
+	int PID, arrival_time, cpu_burst;
+	while(cin >> PID >> arrival_time >> cpu_burst) {
+		Process newProcess;
+		newProcess.arrivalTime = arrival_time;
+		newProcess.PID = PID;
+		newProcess.burstTime = cpu_burst;
+		processes.insert(make_pair(arrival_time, newProcess));
+	}
+
+	int time_passed = 0;
+	while(time_passed < sim_time) {
+		for(it = processes.begin(); it != processes.end(); it++) {
+			if(time_passed == it->second.arrivalTime) {
+				SJFMap.insert(make_pair(it->second.burstTime, it->second));
+			}
+		}
+
+		for(it2 = SJFMap.begin(); it2 != SJFMap.end(); it2++) {
+			if(hasScheduled == false && it2->second.scheduled == false) {
+				if(time_passed != 0) {
+					--time_passed;
+				}
+				fprintf(stdout, "%d: SCHEDULING PID: %d\n", time_passed, it2->second.PID);
+				it2->second.scheduled = true;
+				hasScheduled = true;
+			}
+			if(it2->second.scheduled == true) {
+				if(it2->second.burstTime > 0) {
+					--it2->second.burstTime;
+				}
+				else {
+					fprintf(stdout, "%d: TERMINATING: %d\n", time_passed, it2->second.PID);
+					completed_tasks.push_back(it2->second.PID);
+					SJFMap.erase(it2);
+					hasScheduled = false;
+					break;
+				}
+			}
+		}
+		++time_passed;
+	}
 }
 
 void RR() {
