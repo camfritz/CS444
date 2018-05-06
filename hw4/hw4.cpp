@@ -110,6 +110,7 @@ void SJF() {
 		processes.insert(make_pair(arrival_time, newProcess));
 	}
 
+//if time passed == arrival time, insert process into SJF map for processing
 	int time_passed = 0;
 	while(time_passed < sim_time) {
 		for(it = processes.begin(); it != processes.end(); it++) {
@@ -118,6 +119,7 @@ void SJF() {
 			}
 		}
 
+//SJF
 		for(it2 = SJFMap.begin(); it2 != SJFMap.end(); it2++) {
 			if(hasScheduled == false && it2->second.scheduled == false) {
 				if(time_passed != 0) {
@@ -142,10 +144,64 @@ void SJF() {
 		}
 		++time_passed;
 	}
+
+	cout << "THROUGHPUT: " << completed_tasks.size() << endl;
+	cout << "REMAINING TASKS: " << SJFMap.size() << endl;
 }
 
 void RR() {
 	fprintf(stderr, "****SCHEDULING AS RR****\n");
+
+	multimap <int, Process> RRProcesses;
+	multimap <int, Process>::iterator it2;
+	bool itemsRemaining = false;
+	int currentPID;
+	int RRcounter = time_slice;
+	int PID, arrival_time, cpu_burst;
+	while(cin >> PID >> arrival_time >> cpu_burst) {
+		Process newProcess;
+		newProcess.arrivalTime = arrival_time;
+		newProcess.PID = PID;
+		newProcess.burstTime = cpu_burst;
+		processes.insert(make_pair(arrival_time, newProcess));
+	}
+
+//RR
+	int time_passed = 0;
+	while(time_passed < sim_time) {
+		for(it = processes.begin(); it != processes.end(); it++) {
+			if(it->second.arrivalTime >= arrival_time && it->second.burstTime > 0) {
+				fprintf(stdout, "%d: SCHEDULING: %d\n", time_passed, it->second.PID);
+				while(RRcounter > 0) {
+					if(it->second.burstTime > 0) {
+						--it->second.burstTime;
+						--RRcounter;
+						++time_passed;
+						if(time_passed >= sim_time) {
+							break;
+						}
+					}
+					else {
+						fprintf(stdout, "%d: TERMINATING: %d\n", time_passed, it->second.PID);
+						it->second.scheduled = true;
+						break;
+					}
+				}
+				if(it->second.burstTime > 0) {
+					fprintf(stdout, "%d: SUSPENDING: %d\n", time_passed, it->second.PID);
+				}
+				else {
+					if(it->second.scheduled == false) {
+						fprintf(stdout, "%d: TERMINATING: %d\n", time_passed, it->second.PID);
+					}
+				}
+				if(time_passed >= sim_time) {
+					break;
+				}
+				RRcounter = time_slice;
+			}
+		}
+	}
 }
 
 int main(int argc, char **argv) {
