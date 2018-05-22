@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 #define VERBOSE 0
-#define TABLE_SIZE 16
+#define TABLE_SIZE 24
 #define SRAM 5
 #define HOLD 7
 
@@ -16,12 +16,12 @@ private:
 	int numberofPageFaults;
 	int nextVictimPage;
 
-	bool verifyPageTable(int number);
-	void raisePageFault(int number);
+	bool verifyPageTable(unsigned long number);
+	void raisePageFault(unsigned long number);
 
 public:
 	VM();
-	void getFaultRate();
+	float getFaultRate();
 	void resetFaultRate();
-	byte &VM::operator[] (int index);
+	byte &VM::operator[] (unsigned long index);
 };
