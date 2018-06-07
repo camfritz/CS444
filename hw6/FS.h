@@ -10,6 +10,7 @@ struct FCB {
 
 class FS {
 private:
+  int current_FCB_block;
 	byte freeSpaceList[64];
 	int fileDirectory[32];
 	FCB tempFCB;
@@ -20,10 +21,10 @@ public:
 	void reformat();
 	void createFile(char* name);
 	void openFile(char* name);
-	void writeByte(void* data);
-	readByte();
+	void writeData(char* data);
+	void readData();
 	seekFile();
-	closeFile();
+	void closeFile();
 	deleteFile();
 	void listFiles();
 

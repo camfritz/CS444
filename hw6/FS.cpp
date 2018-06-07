@@ -51,7 +51,7 @@ void FS::createFile(char* name) {
 		return;
 	}
 
-	Serial.println(freeBit);
+	// Serial.println(freeBit);
 	//enter address of FCB into file directory
 	bool spaceinDirectory = false;
 	for(int i = 0; i < 32; i++) {
@@ -124,6 +124,7 @@ void FS::openFile(char* name) {
 		if(fileDirectory[i] != -1) {
 			eeprom.read_page(fileDirectory[i], (byte*) &tempFCB);
 			if(strcmp(tempFCB.fileName, name) == 0) {
+        current_FCB_block = fileDirectory[i];
 				Serial.println("Opening file...");
 				return;
 			}
@@ -133,6 +134,31 @@ void FS::openFile(char* name) {
 	return;
 }
 
-void FS::writeByte(void* data) {
-
+void FS::writeData(char* data) {
+	for(int i = 0; i < strlen(data); i++) {
+  //find data block & location to write to
+  //if data block is empty, find a new location in eeprom for data block
+  if(tempFCB.dataBlocks[tempFCB.fileOffset / 64] == -1) {
+    tempFCB.dataBlocks[tempFCB.fileOffset / 64] = findFreeBit();
+    eeprom.write_byte((tempFCB.fileOffset / 64) + (tempFCB.fileOffset % 64), (byte*) data[i]);
+    ++tempFCB.fileOffset;
+  }
+  else {
+    eeprom.write_byte((tempFCB.fileOffset / 64) + (tempFCB.fileOffset % 64), (byte*) data[i]);
+    ++tempFCB.fileOffset;
+  }
+	}
 }
+
+void FS::closeFile() {
+  //write temp FCB to eeprom
+  eeprom.write_page(current_FCB_block, (byte*) &tempFCB);
+
+  //write free space list to memory
+  eeprom.write_page(0, freeSpaceList);
+}
+
+void FS::readDate() {
+  
+}
+
