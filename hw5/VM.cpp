@@ -11,8 +11,8 @@ VM::VM() : sram(SRAM, HOLD) {
 	nextVictimPage = 0;
 }
 
-float VM::getFaultRate() {
-	return (float) numberofPageFaults / numberofMemoryReferences;
+double VM::getFaultRate() {
+	return (double) numberofPageFaults / (double) numberofMemoryReferences;
 }
 
 void VM::resetFaultRate() {

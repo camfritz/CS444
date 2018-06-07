@@ -12,8 +12,8 @@ private:
 	int pageTable[TABLE_SIZE];
 	byte physicalMemory[32 * TABLE_SIZE];
 	Microchip_23LC1024 sram;
-	int numberofMemoryReferences;
-	int numberofPageFaults;
+	unsigned long numberofMemoryReferences;
+	unsigned long numberofPageFaults;
 	int nextVictimPage;
 
 	bool verifyPageTable(unsigned long number);
@@ -21,7 +21,7 @@ private:
 
 public:
 	VM();
-	float getFaultRate();
+	double getFaultRate();
 	void resetFaultRate();
 	byte &VM::operator[] (unsigned long index);
 };

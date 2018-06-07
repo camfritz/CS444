@@ -183,17 +183,3 @@ if(numWaited > 0):
 else:
 	print >> sys.stderr, "Average client wait time: 0"
 print >> sys.stderr, "Average barber sleep time: " + str(avg_sleep_time / num_barbers)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
