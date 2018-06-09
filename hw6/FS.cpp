@@ -53,7 +53,7 @@ void FS::createFile(char* name) {
 	Serial.print("Creating File: ");
 	Serial.print(name);
 	Serial.println();
-	//TODO check if file already in directory
+	//check if file already in directory
 	for(int i = 0; i < 32; i++) {
 		if(fileDirectory[i] != -1) {
 			eeprom.read_page(fileDirectory[i], (byte*) &tempFCB);
@@ -71,7 +71,6 @@ void FS::createFile(char* name) {
 		return;
 	}
 
-	//Serial.println(freeBit);
 	//enter address of FCB into file directory
 	bool spaceinDirectory = false;
 	for(int i = 0; i < 32; i++) {
@@ -183,6 +182,7 @@ void FS::closeFile(FCB *fcb) {
 				Serial.print(fcb->fileName);
 				Serial.println();
 				eeprom.write_page(fileDirectory[i], (byte*) fcb);
+				//write free space list to eeprom
 				eeprom.write_page(0, freeSpaceList);
 				break;
 			}
@@ -202,6 +202,7 @@ void FS::readData(FCB *fcb, void* data, int numberofBytes) {
 		// Serial.print((char)eeprom.read_byte(((fcb->dataBlocks[fcb->fileOffset / 64]) * 64) + (fcb->fileOffset % 64)));
 		// Serial.println();
 		buf[i] = eeprom.read_byte(((fcb->dataBlocks[fcb->fileOffset / 64]) * 64) + (fcb->fileOffset % 64));
+   //Serial.println((char) buf[i]);
 		++fcb->fileOffset;
 	}
 }

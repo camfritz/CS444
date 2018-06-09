@@ -13,7 +13,7 @@ void setup() {
 
 	FCB file = newFS.openFile("File1.txt");
   FCB file2 = newFS.openFile("anotherFile.txt");
-	char charBuf[18];
+	char charBuf[64];
 	newFS.writeData(&file, "Hello from File 1!", 18);
   newFS.writeData(&file2, "This is file 2!!!!", 18);
 	newFS.closeFile(&file);
@@ -27,7 +27,16 @@ void setup() {
   Serial.println(charBuf);
   newFS.readData(&file2, charBuf, 18);
   Serial.println(charBuf);
-
+  newFS.seekFile(&file);
+  newFS.writeData(&file, "File 1 again!!!!!!", 18);
+  newFS.closeFile(&file);
+  file = newFS.openFile("File1.txt");
+  newFS.seekFile(&file);
+  newFS.readData(&file, charBuf, 18);
+  Serial.println(charBuf);
+  newFS.listFiles();
+  newFS.deleteFile("File1.txt");
+  newFS.deleteFile("anotherFile.txt");
   newFS.listFiles();
 }
 
